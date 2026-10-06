@@ -22,9 +22,8 @@ decodificação, codificação e operações (add, sub, mul, div, fma, conversã
     python3 test_takum.py
 
 ## Estrutura
-- `takum.py` – codec e operações
+- `takum.py` – codec Takum e operações
 - `test_takum.py` – testes
-- `docs/design_log.md` – registro do processo
 
 ## Referências
 1. L. Hunhold, "Streamlining SIMD ISA extensions with takum arithmetic...", MOCAST 2025.
