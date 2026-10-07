@@ -10,7 +10,7 @@ Formato Takum de n bits, do bit mais significativo para o menos:
     M (p bits) mantissa:       parte FRACIONARIA do logaritmo
 
     r = R        se D == 1
-    r = 7 - R    se D == 0
+    r = 7 - R (Complemento de R)   se D == 0
     p = n - r - 5
 
 Valor do numero:
