@@ -15,7 +15,7 @@ Formato Takum de n bits, do bit mais significativo para o menos:
 
 Valor do numero:
     valor = (-1)^S * raiz(e) ^ ell
-    ell   = (-1)^S * (c + m)
+    ell(l)   = (-1)^S * (c + m)
 
 Casos especiais:
     zero = todos os bits 0
