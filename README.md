@@ -3,11 +3,11 @@
 Projeto Integrador de AOC – UFMG, semestre 2026/02.
 
 ## Integrantes
-- André
-- Arthur
-- Caio
+- André Nunes Fernandes
+- Caio Henrique Pereira de Freitas
 - Guilherme Gonçalves Rocha
-- Julia
+- Julia Guedes Freire
+- Márcio Arthur Machado de Oliveira
 
 ## O que há aqui
 Simulador funcional em Python do formato aritmético Takum (T8, T16, T32):
