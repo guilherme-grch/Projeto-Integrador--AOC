@@ -257,6 +257,139 @@ for v in [1.0, -1.0, 2.0]:
         print("      %-22s = %s" % (nome_campo, conteudo))
 
 # ---------------------------------------------------------------------------
+titulo("13. CONFERENCIA COM O ARTIGO DO HUNHOLD (AVX10.2, arXiv 2503.14067)")
+print("  Cada teste confere uma afirmacao do artigo.")
+
+
+def igual_ou_nan(a, b):
+    """True se a == b, ou se os dois sao NaN."""
+    if math.isnan(a) and math.isnan(b):
+        return True
+    return a == b
+
+
+# 13.1 Figura 1 do artigo: S(1) D(1) R(3) C(r bits, r de 0 a 7) F(p bits)
+#      com p variando de n-12 ate n-5.
+for n in (8, 16, 32, 64):
+    valores_p = sorted(set([n - r - 5 for r in range(8)]))
+    check("T%-2d: p varia de n-12=%d ate n-5=%d" % (n, n - 12, n - 5),
+          valores_p == list(range(n - 12, n - 4)))
+check("T64 tem no minimo 52 bits de fracao (o mesmo que o float64)", 64 - 12 >= 52)
+
+# 13.2 Os campos que o inspect devolve respeitam esse layout, em TODOS os padroes.
+erros_t16 = 0
+for b in range(1 << 16):
+    info = takum.inspect(b, 16)
+    if "especial" in info:
+        continue
+    r = info["r (tamanho de C)"]
+    p = info["p (tamanho de M)"]
+    if not (0 <= r <= 7 and 4 <= p <= 11 and 5 + r + p == 16):
+        erros_t16 = erros_t16 + 1
+check("T16: 65534 padroes com 0<=r<=7, 4<=p<=11 e 5+r+p=16 (%d erros)" % erros_t16,
+      erros_t16 == 0)
+
+erros_t8 = 0
+for b in range(256):
+    info = takum.inspect(b, 8)
+    if "especial" in info:
+        continue
+    r = info["r (tamanho de C)"]
+    p = info["p (tamanho de M)"]
+    # em T8 o C pode nao caber: so min(r, 3) bits de C existem
+    if not (0 <= r <= 7 and 0 <= p <= 3 and 5 + min(r, 3) + p == 8):
+        erros_t8 = erros_t8 + 1
+check("T8: 254 padroes: 5 + bits de C que cabem + p = 8 (%d erros)" % erros_t8,
+      erros_t8 == 0)
+
+# 13.3 "Takums sao invariantes sob extensao com zeros":
+#      acrescentar zeros a direita nao muda o valor.
+erros = 0
+for b in range(256):
+    for n_maior in (12, 16, 32):
+        if not igual_ou_nan(takum.decode(b, 8), takum.decode(b << (n_maior - 8), n_maior)):
+            erros = erros + 1
+check("T8 + zeros a direita = mesmo valor em T12, T16 e T32 (%d erros)" % erros, erros == 0)
+
+erros = 0
+for b in range(4096):
+    for n_maior in (16, 32):
+        if not igual_ou_nan(takum.decode(b, 12), takum.decode(b << (n_maior - 12), n_maior)):
+            erros = erros + 1
+check("T12 + zeros a direita = mesmo valor em T16 e T32 (%d erros)" % erros, erros == 0)
+
+erros = 0
+for b in range(1 << 16):
+    if not igual_ou_nan(takum.decode(b, 16), takum.decode(b << 16, 32)):
+        erros = erros + 1
+check("T16 + zeros a direita = mesmo valor em T32 (%d erros)" % erros, erros == 0)
+
+# 13.4 "Ordem e negacao naturais em complemento de dois":
+#      negar o padrao (complemento de dois) e negar o valor.
+for n in (8, 12, 16):
+    mascara = (1 << n) - 1
+    nar = 1 << (n - 1)
+    erros = 0
+    for b in range(1, 1 << n):
+        if b == nar:
+            continue
+        negado = (-b) & mascara
+        if not aprox(takum.decode(negado, n), -takum.decode(b, n), 1e-12):
+            erros = erros + 1
+    check("T%-2d: decode(-padrao) == -decode(padrao) (%d erros)" % (n, erros), erros == 0)
+
+# 13.5 "Zero unico, sem sinal": so o padrao 0 vale zero; so o NaR vale NaN;
+#      todo o resto e finito e diferente de zero (sem infinito, sem subnormal).
+for n in (8, 12):
+    nar = 1 << (n - 1)
+    zeros = 0
+    nans = 0
+    estranhos = 0
+    for b in range(1 << n):
+        v = takum.decode(b, n)
+        if math.isnan(v):
+            nans = nans + 1
+        elif v == 0.0:
+            zeros = zeros + 1
+        elif not math.isfinite(v):
+            estranhos = estranhos + 1
+    check("T%-2d: 1 zero, 1 NaR e nenhum infinito (zeros=%d, NaR=%d, infinitos=%d)" % (
+        n, zeros, nans, estranhos), zeros == 1 and nans == 1 and estranhos == 0)
+
+# 13.6 "O decodificador so precisa dos 12 bits mais significativos":
+#      S, D, R e C (e portanto c) nao mudam se mexermos nos outros bits.
+import random
+random.seed(3)
+mudou = 0
+testados = 0
+for _ in range(3000):
+    b = random.getrandbits(32)
+    posicao = random.randint(0, 19)          # um dos 20 bits de baixo
+    b2 = b ^ (1 << posicao)
+    i1 = takum.inspect(b, 32)
+    i2 = takum.inspect(b2, 32)
+    if "especial" in i1 or "especial" in i2:
+        continue
+    testados = testados + 1
+    chaves = ["S", "D", "R", "r (tamanho de C)", "C", "c (parte inteira)"]
+    for k in chaves:
+        if i1[k] != i2[k]:
+            mudou = mudou + 1
+check("T32: mexer nos 20 bits de baixo nunca muda S, D, R, C (%d testes, %d mudancas)" % (
+    testados, mudou), mudou == 0)
+
+# 13.7 "Faixa dinamica grande e quase toda realizada ja com 8 bits".
+faixas = {}
+for n in (8, 16, 32):
+    maior = takum.decode((1 << (n - 1)) - 1, n)
+    menor = takum.decode(1, n)
+    faixas[n] = math.log10(maior / menor)
+check("T8 tem pelo menos 90%% da faixa do T32 (%.0f de %.0f ordens)" % (faixas[8], faixas[32]),
+      faixas[8] >= 0.9 * faixas[32])
+check("T16 e T32 tem a mesma faixa (%.1f e %.1f ordens)" % (faixas[16], faixas[32]),
+      abs(faixas[16] - faixas[32]) < 0.5)
+
+# ---------------------------------------------------------------------------
 print()
 print("=" * 62)
 if len(falhas) > 0:
