@@ -1,5 +1,4 @@
-"""
-takum.py - Versao SIMPLIFICADA (mesma logica da versao original).
+""".
 
 Formato Takum de n bits, do bit mais significativo para o menos:
 
@@ -10,12 +9,12 @@ Formato Takum de n bits, do bit mais significativo para o menos:
     M (p bits) mantissa:       parte FRACIONARIA do logaritmo
 
     r = R        se D == 1
-    r = 7 - R (Complemento de R)   se D == 0
+    r = 7 - R    se D == 0
     p = n - r - 5
 
 Valor do numero:
     valor = (-1)^S * raiz(e) ^ ell
-    ell(l)   = (-1)^S * (c + m)
+    ell   = (-1)^S * (c + m)
 
 Casos especiais:
     zero = todos os bits 0
@@ -266,11 +265,12 @@ def inspect(bits, n):
     bits = bits & ((1 << n) - 1)
     largura = max(n, 12)
     b = bits << (largura - n)
+    texto_bits = format(bits, "0%db" % n)
 
     if b == 0:
-        return {"especial": "zero", "bits": format(bits, "0%db" % n), "valor": 0.0}
+        return {"especial": "zero", "bits": texto_bits, "valor": 0.0}
     if b == nar_pattern(largura):
-        return {"especial": "NaR", "bits": format(bits, "0%db" % n), "valor": math.nan}
+        return {"especial": "NaR", "bits": texto_bits, "valor": math.nan}
 
     S = pegar_bits(b, largura - 1, 1)
     D = pegar_bits(b, largura - 2, 1)
@@ -284,19 +284,37 @@ def inspect(bits, n):
         c = (1 << r) - 1 + C
     else:
         c = -(1 << (r + 1)) + 1 + C
-    p = largura - r - 5
-    M = pegar_bits(b, 0, p)
+
+    # Para n < 12 o campo C pode nao caber nos n bits. Os bits que faltam
+    # valem 0 (o padrao e "estendido com zeros" ate 12 bits para decodificar).
+    # Por isso a mantissa so tem os bits que realmente existem:
+    r_visivel = min(r, n - 5)
+    p = n - 5 - r_visivel
+    M = pegar_bits(bits, 0, p)
     if p > 0:
         m = M / (1 << p)
     else:
         m = 0.0
+
     if S == 1:
         ell = -(c + m)
     else:
         ell = c + m
 
+    # texto com os campos separados: S | D | RRR | C | M
+    parte_c = texto_bits[5:5 + r_visivel]
+    parte_m = texto_bits[5 + r_visivel:]
+    if parte_c == "":
+        parte_c = "-"
+    if parte_m == "":
+        parte_m = "-"
+    campos = texto_bits[0] + " | " + texto_bits[1] + " | " + texto_bits[2:5] + " | " + parte_c + " | " + parte_m
+    if r > r_visivel:
+        campos = campos + "   (C precisa de %d bits, so %d cabem: o resto vale 0)" % (r, r_visivel)
+
     return {
-        "bits": format(bits, "0%db" % n),
+        "bits": texto_bits,
+        "campos": campos,
         "S": S, "D": D, "R": R,
         "r (tamanho de C)": r,
         "C": C, "c (parte inteira)": c,
