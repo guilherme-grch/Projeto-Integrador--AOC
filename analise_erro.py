@@ -135,7 +135,11 @@ def resumo(erros):
         if not math.isfinite(e):
             n_estouro = n_estouro + 1
     total = len(erros)
+    brutos = sorted(e for e in erros if math.isfinite(e))     # SEM limite de 100%
     return {
+        "bruto_p50": percentil(brutos, 0.50),
+        "bruto_p99": percentil(brutos, 0.99),
+        "bruto_max": brutos[-1] if len(brutos) > 0 else float("nan"),
         "amostras": total,
         "overflow_%": 100.0 * n_estouro / total,
         "p50": percentil(combinados, 0.50),
@@ -190,6 +194,14 @@ def imprimir_cenario(faixa, resumos):
     for nome, r in resumos.items():
         print("  %-10s %8.1f%% %9.2e %9.2e %9.2e %9.2e %9.2e" % (
             nome, r["overflow_%"], r["p50"], r["p90"], r["p95"], r["p99"], r["max"]))
+
+    print()
+    print("  Erro ORIGINAL, sem o limite de 100% (so elementos finitos; estouros ficam de fora)")
+    print("  %-10s %9s %9s %9s" % ("formato", "p50", "p99", "max"))
+    print("  " + "-" * 40)
+    for nome, r in resumos.items():
+        print("  %-10s %9.2e %9.2e %9.2e" % (nome, r["bruto_p50"], r["bruto_p99"], r["bruto_max"]))
+    print("  (a tabela acima limita o erro a 100% e conta estouro como 100%; esta mostra o erro real)")
 
     print()
     print("  Histograma: porcentagem dos elementos de y em cada faixa de erro relativo")
