@@ -390,6 +390,117 @@ check("T16 e T32 tem a mesma faixa (%.1f e %.1f ordens)" % (faixas[16], faixas[3
       abs(faixas[16] - faixas[32]) < 0.5)
 
 # ---------------------------------------------------------------------------
+titulo("14. REFERENCIA INDEPENDENTE (mpmath + manipulacao de texto)")
+print("  Outra implementacao do decode, escrita so a partir da Definicao 2 do")
+print("  artigo, sem reaproveitar nenhuma funcao do takum.py.")
+import mpmath
+mpmath.mp.dps = 50
+
+
+def decode_referencia(bits, n):
+    """Decode do takum logaritmico lendo o padrao como TEXTO de bits."""
+    t = format(bits, "0%db" % n)
+    t = t + "0" * max(0, 12 - n)                  # ghost bits
+    if int(t, 2) == 0:
+        return mpmath.mpf(0)
+    if t[0] == "1" and set(t[1:]) == {"0"}:
+        return None                               # NaR
+    S, D, R = int(t[0]), int(t[1]), int(t[2:5], 2)
+    r = R if D == 1 else 7 - R
+    C = int(t[5:5 + r], 2) if r > 0 else 0
+    frac = t[5 + r:]
+    m = mpmath.mpf(int(frac, 2)) / mpmath.mpf(2) ** len(frac) if frac else mpmath.mpf(0)
+    c = (2 ** r - 1 + C) if D == 1 else (-2 ** (r + 1) + 1 + C)
+    ell = (c + m) * (-1 if S else 1)
+    return (-1 if S else 1) * mpmath.exp(ell / 2)
+
+
+def concorda(n, padroes):
+    ruins = 0
+    maior = mpmath.mpf(0)
+    for b in padroes:
+        ref = decode_referencia(b, n)
+        obt = takum.decode(b, n)
+        if ref is None:
+            if not math.isnan(obt):
+                ruins = ruins + 1
+        elif ref == 0:
+            if obt != 0.0:
+                ruins = ruins + 1
+        else:
+            dif = abs((mpmath.mpf(obt) - ref) / ref)
+            if dif > maior:
+                maior = dif
+            if dif > 1e-13:
+                ruins = ruins + 1
+    return ruins, maior
+
+
+for n in (8, 16):
+    ruins, maior = concorda(n, range(1 << n))
+    check("T%d: decode == referencia independente nos %d padroes (maior dif %.1e)" % (
+        n, 1 << n, float(maior)), ruins == 0, "%d divergencias" % ruins)
+import random as _random
+_random.seed(3)
+amostra32 = [_random.getrandbits(32) for _ in range(20000)] + list(range(1, 3000)) + \
+            [(1 << 32) - k for k in range(1, 3000)]
+ruins, maior = concorda(32, amostra32)
+check("T32: decode == referencia independente em %d padroes (maior dif %.1e)" % (
+    len(amostra32), float(maior)), ruins == 0, "%d divergencias" % ruins)
+
+# 14.2 vizinho mais proximo na escala logaritmica, com referencia mpmath (T16)
+vals16 = []
+for b in range(1, 1 << 15):                      # positivos (bit de sinal 0)
+    vals16.append((decode_referencia(b, 16), b))
+vals16.sort(key=lambda t: t[0])
+import bisect
+chaves = [mpmath.log(v) for v, _ in vals16]
+chaves_f = [float(k) for k in chaves]
+_random.seed(4)
+ruins = 0
+for _ in range(5000):
+    x = 10.0 ** _random.uniform(-24, 24)
+    i = bisect.bisect_left(chaves_f, math.log(x))
+    cand = [vals16[j] for j in (i - 1, i) if 0 <= j < len(vals16)]
+    melhor = min(cand, key=lambda t: abs(mpmath.log(t[0]) - mpmath.log(mpmath.mpf(x))))[1]
+    if takum.encode(x, 16) != melhor:
+        ruins = ruins + 1
+check("T16: encode escolhe o vizinho mais proximo no log (5000 valores, ref. mpmath)",
+      ruins == 0, "%d divergencias" % ruins)
+
+# 14.3 simetria do encode: encode(-x) e o complemento de dois de encode(x)
+ruins = 0
+for _ in range(5000):
+    x = 10.0 ** _random.uniform(-30, 30)
+    for n in (8, 16, 32):
+        if takum.encode(-x, n) != (-takum.encode(x, n)) % (1 << n):
+            ruins = ruins + 1
+check("encode(-x) == complemento de dois de encode(x) (T8/T16/T32, 5000 valores)",
+      ruins == 0, "%d divergencias" % ruins)
+
+# ---------------------------------------------------------------------------
+titulo("15. NaR E ZERO EM TODAS AS OPERACOES (inclusive mul_lns)")
+for n in (8, 16, 32):
+    NAR = takum.nar_pattern(n)
+    um = takum.encode(1.0, n)
+    ok = True
+    for nome, f in (("add", takum.add), ("sub", takum.sub), ("mul", takum.mul),
+                    ("div", takum.div), ("mul_lns", takum.mul_lns)):
+        for a, b in ((NAR, um), (um, NAR), (NAR, NAR), (NAR, 0), (0, NAR)):
+            if f(a, b, n) != NAR:
+                ok = False
+                print("      divergencia:", n, nome, a, b)
+    check("T%d: NaR em qualquer operando da NaR (add, sub, mul, div, mul_lns), "
+          "inclusive 0 x NaR" % n, ok)
+    check("T%d: x / 0 = NaR e 0 / 0 = NaR" % n,
+          takum.div(um, 0, n) == NAR and takum.div(0, 0, n) == NAR)
+    check("T%d: 0 + x = x, 0 * x = 0" % n,
+          takum.add(0, um, n) == um and takum.mul(0, um, n) == 0)
+    check("T%d: fma com NaR em qualquer posicao da NaR" % n,
+          takum.fma(NAR, um, um, n) == NAR and takum.fma(um, NAR, um, n) == NAR and
+          takum.fma(um, um, NAR, n) == NAR)
+
+# ---------------------------------------------------------------------------
 print()
 print("=" * 62)
 if len(falhas) > 0:
@@ -399,3 +510,7 @@ if len(falhas) > 0:
 else:
     print("RESULTADO: todos os %d testes passaram." % total)
 print("=" * 62)
+
+if len(falhas) > 0:
+    import sys
+    sys.exit(1)

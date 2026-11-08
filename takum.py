@@ -1,4 +1,5 @@
-""".
+"""
+takum.py - Codec e aritmetica do formato Takum LOGARITMICO (T8, T16, T32).
 
 Formato Takum de n bits, do bit mais significativo para o menos:
 
@@ -328,8 +329,13 @@ def inspect(bits, n):
 # ---------------------------------------------------------------------------
 # OPERACOES: decodifica -> faz a conta em float -> codifica de volta
 # ---------------------------------------------------------------------------
-# O float do Python (double, 64 bits) e bem mais preciso que T8/T16/T32,
-# entao o resultado e o mesmo que o hardware daria.
+# Modelo FUNCIONAL: a conta e feita em float64 (53 bits de significando, bem
+# mais que os <= 27 bits de fracao de um T32) e o resultado e arredondado UMA
+# vez para n bits. Isso da o resultado arredondado corretamente na grande
+# maioria dos casos, mas NAO foi demonstrado que um hardware Takum produziria
+# exatamente os mesmos bits (ele pode usar aproximacoes proprias para somar
+# logaritmos). Trate este modelo como a referencia de projeto, nao como prova
+# de equivalencia com hardware.
 # Se qualquer entrada for NaR, o resultado e NaR.
 
 def add(a, b, n):
@@ -371,7 +377,12 @@ def div(a, b, n):
 
 
 def fma(a, b, c, n, n_out=None):
-    """(a * b) + c com um unico arredondamento no final.
+    """(a * b) + c, arredondado uma vez para n_out bits no final.
+
+    Com Python >= 3.13 usa math.fma (produto e soma com um unico
+    arredondamento em float64). Em versoes anteriores faz x*y + z, que
+    arredonda duas vezes em float64 (o efeito e desprezivel perto da
+    precisao de T8/T16/T32, mas os bits podem diferir em casos raros).
 
     a e b tem n bits. c e o resultado tem n_out bits (se n_out nao for
     dado, usa n). Isso permite somar em precisao maior: entradas T16,
@@ -416,10 +427,11 @@ def mul_lns(a, b, n):
     x = decode(a, n)
     y = decode(b, n)
 
-    if x == 0.0 or y == 0.0:
-        return 0
+    # NaR vem ANTES de zero: 0 * NaR = NaR (igual a mul()).
     if math.isnan(x) or math.isnan(y):
         return nar_pattern(n)
+    if x == 0.0 or y == 0.0:
+        return 0
 
     ell_x = math.log(abs(x)) / LN_RAIZ_E
     ell_y = math.log(abs(y)) / LN_RAIZ_E

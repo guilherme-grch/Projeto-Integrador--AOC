@@ -29,37 +29,49 @@ np.random.seed(42)
 # Emulacao dos formatos IEEE754 de baixa precisao
 # ---------------------------------------------------------------------------
 
-def round_ieee(x: float, exp_bits: int, mant_bits: int) -> float:
-    """Arredonda um float para um formato IEEE754 generico de baixa precisao.
+def round_ieee(x: float, exp_bits: int, mant_bits: int, estilo: str = "ieee") -> float:
+    """Arredonda um float para um formato de ponto flutuante de baixa precisao.
 
-    Usado para emular FP8 E4M3 (exp=4, mant=3) e E5M2 (exp=5, mant=2),
-    que o numpy nao suporta nativamente.
+    estilo="ieee": expoente todo 1 reservado para infinito/NaN (FP16, OFP8 E5M2).
+    estilo="e4m3": OFP8 E4M3 - NAO tem infinito; o expoente todo 1 vale como
+                   numero normal e so S.1111.111 e NaN. Maior valor = 448.
+
+    Arredondamento: para o mais proximo, empate para o par. Resultado acima do
+    maior valor (ja apos arredondar) vira inf, que o benchmark conta como
+    estouro (no E4M3 real, e o NaN da conversao sem saturacao).
     """
     if x == 0.0 or math.isnan(x) or math.isinf(x):
         return x
 
     bias = (1 << (exp_bits - 1)) - 1
-    exp_max = (1 << exp_bits) - 2 - bias      # maior expoente normal
-    exp_min = 1 - bias                        # menor expoente normal
+    if estilo == "e4m3":
+        exp_max = (1 << exp_bits) - 1 - bias          # 15 - 7 = 8
+        mant_max = (1 << mant_bits) - 2               # S.1111.111 e NaN
+    else:
+        exp_max = (1 << exp_bits) - 2 - bias          # maior expoente normal
+        mant_max = (1 << mant_bits) - 1
+    exp_min = 1 - bias                                # menor expoente normal
+    maximo = (1.0 + mant_max / (1 << mant_bits)) * 2.0 ** exp_max
 
     sinal = math.copysign(1.0, x)
     mag = abs(x)
 
-    e = math.floor(math.log2(mag))
-    if e > exp_max:
-        return sinal * float("inf")
+    # e = piso(log2(mag)) exato (frexp nao erra perto de potencias de 2)
+    e = math.frexp(mag)[1] - 1
     if e < exp_min:
-        # regiao subnormal: quantiza no menor passo possivel
-        passo = 2.0 ** (exp_min - mant_bits)
-        return sinal * round(mag / passo) * passo
+        passo = 2.0 ** (exp_min - mant_bits)          # regiao subnormal
+    else:
+        passo = 2.0 ** (e - mant_bits)
+    r = round(mag / passo) * passo                    # round(): empate -> par
 
-    passo = 2.0 ** (e - mant_bits)
-    return sinal * round(mag / passo) * passo
+    if r > maximo:                                    # estouro (inclui o que
+        return sinal * float("inf")                   # estoura ao arredondar)
+    return sinal * r
 
 
 FORMATOS = {
     # nome            : (funcao_arredonda, funcao_decodifica_para_float)
-    "FP8 E4M3":  lambda v: round_ieee(v, 4, 3),
+    "FP8 E4M3":  lambda v: round_ieee(v, 4, 3, "e4m3"),
     "FP8 E5M2":  lambda v: round_ieee(v, 5, 2),
     "FP16":      lambda v: float(np.float16(v)),
     "FP32":      lambda v: float(np.float32(v)),
@@ -116,16 +128,21 @@ def spmv_formato(entradas, x, n, arredonda):
 
 
 def erro_relativo(y_teste, y_exato):
-    """Erro relativo por elemento, comparado a referencia exata."""
+    """Erro relativo por elemento, comparado a referencia exata.
+
+    A diferenca e calculada com Fractions (sem converter a referencia para
+    float antes), para nao perder precisao quando o erro e muito pequeno.
+    Estouro (inf/NaN) devolve inf; referencia igual a zero e ignorada.
+    """
     erros = []
     for yt, ye in zip(y_teste, y_exato):
-        ye_f = float(ye)
-        if ye_f == 0.0:
+        ye = Fraction(ye)
+        if ye == 0:
             continue
         if math.isnan(yt) or math.isinf(yt):
             erros.append(float("inf"))
             continue
-        erros.append(abs((yt - ye_f) / ye_f))
+        erros.append(float(abs((Fraction(yt) - ye) / ye)))
     return erros
 
 
