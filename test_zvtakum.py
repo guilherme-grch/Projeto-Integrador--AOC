@@ -48,7 +48,6 @@ def titulo(texto):
     print("=" * 62)
 
 
-# ---------------------------------------------------------------------------
 titulo("1. PALAVRAS DE 32 BITS (valores documentados no HANDOFF)")
 esperados = [
     ("vtadd.vv v3, v1, v2",  0x0220C1DB),
@@ -62,7 +61,6 @@ for texto, palavra_esperada in esperados:
     check("%-22s -> 0x%08X" % (texto, obtida), obtida == palavra_esperada,
           "esperado 0x%08X" % palavra_esperada)
 
-# ---------------------------------------------------------------------------
 titulo("2. CAMPOS DA INSTRUCAO (opcode, funct3, funct6)")
 for nome in zvtakum.FUNCT6:
     p = encode_instr(nome, 1, 2, 3)
@@ -76,7 +74,6 @@ check("opcode Zvtakum (0x5B) diferente do OP-V do RVV oficial (0x57)",
 check("todos os funct6 sao diferentes entre si",
       len(set(zvtakum.FUNCT6.values())) == len(zvtakum.FUNCT6))
 
-# ---------------------------------------------------------------------------
 titulo("3. IDA E VOLTA: montar -> decodificar (TODOS os registradores)")
 erros_ida_volta = 0
 combinacoes = 0
@@ -89,7 +86,7 @@ for nome in zvtakum.FUNCT6:
                 if not (d["nome"] == nome and d["vd"] == vd and
                         d["vs1"] == vs1 and d["vs2"] == vs2):
                     erros_ida_volta = erros_ida_volta + 1
-check("%d combinacoes (5 instrucoes x 32x32x32 registradores) sem erro" % combinacoes,
+check("%d combinacoes (6 instrucoes x 32x32x32 registradores) sem erro" % combinacoes,
       erros_ida_volta == 0, "%d erros" % erros_ida_volta)
 
 for texto in ["vtadd.vv v3, v1, v2", "vtsub.vv v31, v0, v15",
@@ -97,7 +94,6 @@ for texto in ["vtadd.vv v3, v1, v2", "vtsub.vv v31, v0, v15",
     check("montar/desmontar: " + texto, desmontar(montar(texto)) == texto)
 check("montar/desmontar: vncvt.t.t v7, v1", desmontar(montar("vncvt.t.t v7, v1")) == "vncvt.t.t v7, v1")
 
-# ---------------------------------------------------------------------------
 titulo("4. ERROS QUE DEVEM SER DETECTADOS")
 check("instrucao desconhecida da erro", da_erro(montar, "vxyz.vv v1, v2, v3"))
 check("registrador v32 (fora de v0..v31) da erro", da_erro(encode_instr, "vtadd.vv", 32, 1, 2))
@@ -113,7 +109,6 @@ check("funct6 desconhecido e rejeitado", da_erro(decode_instr, palavra_ruim))
 check("comentario no fim da linha e ignorado",
       montar("vtadd.vv v3, v1, v2   # soma") == montar("vtadd.vv v3, v1, v2"))
 
-# ---------------------------------------------------------------------------
 titulo("5. VSETVLI (configuracao de SEW e VL)")
 cpu = ProcessadorZvtakum(vlen=128)
 check("VLEN=128, SEW=32 -> VLMAX=4", cpu.vsetvli(4, 32) == 4)
@@ -126,7 +121,6 @@ check("SEW invalido (7) da erro", da_erro(cpu.vsetvli, 4, 7))
 cpu256 = ProcessadorZvtakum(vlen=256)
 check("VLEN=256, SEW=32 -> VLMAX=8", cpu256.vsetvli(100, 32) == 8)
 
-# ---------------------------------------------------------------------------
 titulo("6. SOMA, SUBTRACAO E MULTIPLICACAO EM T8, T16 E T32")
 # O resultado do processador tem que ser IGUAL ao de takum.add/sub/mul
 # (mesmo padrao de bits), e proximo do valor real dentro da precisao do formato.
@@ -170,7 +164,6 @@ for sew in (8, 16, 32):
         check("T%-2d %s: valores proximos do real %s" % (
             sew, nome, [round(v, 4) for v in obtido]), bom)
 
-# ---------------------------------------------------------------------------
 titulo("7. VL MENOR QUE O REGISTRADOR (so processa VL elementos)")
 cpu = ProcessadorZvtakum(vlen=128)
 cpu.vsetvli(2, 32)            # so 2 dos 4 elementos
@@ -182,7 +175,6 @@ r = cpu.ler(3)
 check("VL=2: [11, 22] -> %s" % [round(v, 4) for v in r],
       aprox(r[0], 11.0, 1e-6) and aprox(r[1], 22.0, 1e-6))
 
-# ---------------------------------------------------------------------------
 titulo("8. PRODUTO ESCALAR (vtdot.vv)")
 # T32: resultado esperado 1.5*2 + 2*0.5 + 3.5*2 + 4*3 = 23
 cpu = ProcessadorZvtakum(vlen=128)
@@ -220,7 +212,6 @@ cpu.carregar(2, [5.0, 6.0, 7.0, 8.0])
 cpu.executar(montar("vtdot.vv v6, v1, v2"))
 check("vtdot com vetor de zeros da 0", cpu.ler(6)[0] == 0.0)
 
-# ---------------------------------------------------------------------------
 titulo("9. CONVERSAO DE LARGURA (vncvt.t.t)")
 cpu = ProcessadorZvtakum(vlen=128)
 cpu.vsetvli(4, 32)
@@ -236,13 +227,7 @@ check("T32 -> T16: %s" % [round(v, 4) for v in r], bom)
 check("T32 -> T16: bits iguais aos de takum.convert",
       cpu.vregs[7] == [takum.convert(b, 32, 16) for b in cpu.vregs[1]])
 
-cpu.executar(encode_instr("vncvt.t.t", 8, 1, 0), sew_destino=8)   # T32 -> T8
-r = cpu.ler(8, sew=8)
-bom = True
-for x, o in zip(entrada, r):
-    if not aprox(o, x, 0.285):   # T8: erro maximo ~28.4% quando M tem 0 bits
-        bom = False
-check("T32 -> T8 (sew_destino=8): %s" % [round(v, 3) for v in r], bom)
+check("T32->T8 direto rejeitado", da_erro(cpu.executar, encode_instr("vncvt.t.t",8,1,0), 8))
 
 cpu = ProcessadorZvtakum(vlen=128)
 cpu.vsetvli(4, 16)
@@ -255,7 +240,6 @@ for x, o in zip(entrada, r):
         bom = False
 check("T16 -> T8: %s" % [round(v, 3) for v in r], bom)
 
-# ---------------------------------------------------------------------------
 titulo("10. NaR E ZERO PASSANDO PELAS INSTRUCOES")
 for sew in (8, 16, 32):
     cpu = ProcessadorZvtakum(vlen=128)
@@ -274,7 +258,6 @@ cpu.carregar(2, [7.0, 0.0])
 cpu.executar(montar("vtmul.vv v3, v1, v2"))
 check("0 * 7 = 0 e 5 * 0 = 0", cpu.ler(3) == [0.0, 0.0])
 
-# ---------------------------------------------------------------------------
 titulo("11. CONTADOR DE INSTRUCOES (dado da Fase 3)")
 cpu = ProcessadorZvtakum(vlen=128)
 cpu.vsetvli(4, 32)                       # conta 1
@@ -285,7 +268,6 @@ cpu.executar(montar("vtmul.vv v4, v1, v2"))   # conta 1
 check("vsetvli + 2 instrucoes = 3 no contador (obtido %d)" % cpu.contador_instr,
       cpu.contador_instr == 3)
 
-# ---------------------------------------------------------------------------
 print()
 print("=" * 62)
 if len(falhas) > 0:
