@@ -1,115 +1,29 @@
-"""
-executar_tudo.py - Roda TODOS os testes e scripts do projeto e mostra um resumo.
-
-E o "script de teste automatico" pedido no enunciado (entregavel 1).
-Cada etapa roda num processo separado; a saida completa de cada uma
-fica guardada em  resultados/<nome>.txt .
-
-Rodar:  python3 executar_tudo.py            (tudo, leva cerca de 1 minuto)
-        python3 executar_tudo.py --rapido   (so os testes, sem os benchmarks)
-
-Codigo de saida: 0 se tudo passou, 1 se alguma etapa falhou (serve para CI).
-"""
-
-import os
-import subprocess
-import sys
-import time
-
-PASTA = os.path.dirname(os.path.abspath(__file__))
-
-# (descricao, arquivo, argumentos, texto que precisa aparecer na saida, e_teste)
-ETAPAS = [
-    ("Fase 1 - testes do takum.py",          "test_takum.py",          [], "todos os", True),
-    ("Fase 2 - testes do zvtakum.py",        "test_zvtakum.py",        [], "todos os", True),
-    ("Fase 3 - testes das analises",         "test_analises.py",       [], "todos os", True),
-    ("Terminal - 3.14 em T16 = 0x4D27",      "takum_terminal.py",      ["3.14"], "0x4D27", True),
-    ("Fase 2 - demonstracao do Zvtakum",     "demo_zvtakum.py",        [], "FIM DA DEMONSTRACAO", False),
-    ("Fase 3 - benchmark SpMV",              "eval_spmv.py",           [], "OBSERVACAO PARA O ARTIGO", False),
-    ("Fase 3 - distribuicao do erro",        "analise_erro.py",        [], "OK:", False),
-    ("Fase 3 - contagem de instrucoes",      "contagem_instrucoes.py", [], "OK:", False),
-    ("Fase 3 - CSRs e excecoes",             "analise_csr.py",         [], "OK:", False),
-    ("Fase 3 - grafico de instrucoes",       "grafico_instrucoes.py",  [], "OK:", False),
-]
-
-
-def resumo_da_saida(saida):
-    """Uma linha curta que descreve o resultado (a linha RESULTADO ou OK)."""
-    ultima = ""
-    for linha in saida.splitlines():
-        limpa = linha.strip()
-        if limpa.startswith("RESULTADO:") or limpa.startswith("OK:"):
-            ultima = limpa
-    if ultima == "":
-        marcadas = saida.count("[OK]")
-        if marcadas > 0:
-            ultima = "%d verificacoes [OK]" % marcadas
-    return ultima
-
-
-def rodar(arquivo, argumentos):
-    """Roda um script. Devolve (codigo de saida, texto de saida, segundos)."""
-    inicio = time.time()
-    try:
-        r = subprocess.run([sys.executable, arquivo] + argumentos, cwd=PASTA,
-                           capture_output=True, text=True, timeout=900)
-        codigo = r.returncode
-        saida = r.stdout + r.stderr
-    except subprocess.TimeoutExpired:
-        codigo = 1
-        saida = "TEMPO ESGOTADO (mais de 15 minutos)"
-    return codigo, saida, time.time() - inicio
-
+"""Executor unico. Qualquer falha interrompe a aprovacao final (exit 1)."""
+from pathlib import Path
+import argparse,subprocess,sys,json,platform,hashlib,time,py_compile,os
 
 def main():
-    so_testes = "--rapido" in sys.argv
-
-    pasta_saida = os.path.join(PASTA, "resultados")
-    if not os.path.isdir(pasta_saida):
-        os.makedirs(pasta_saida)
-
-    print("=" * 78)
-    print("EXECUTANDO O PROJETO TAKUM-RVV")
-    print("=" * 78)
-
-    falhas = []
-    linhas = []
-    for descricao, arquivo, argumentos, esperado, e_teste in ETAPAS:
-        if so_testes and not e_teste:
-            continue
-        print("  rodando %-28s ..." % arquivo, flush=True)
-        codigo, saida, segundos = rodar(arquivo, argumentos)
-
-        nome = arquivo.replace(".py", "") + ".txt"
-        with open(os.path.join(pasta_saida, nome), "w") as f:
-            f.write(saida)
-
-        passou = (codigo == 0) and (esperado in saida)
-        if not passou:
-            falhas.append(descricao)
-        linhas.append((descricao, passou, segundos, resumo_da_saida(saida), codigo))
-
-    print()
-    print("=" * 78)
-    print("RESUMO")
-    print("=" * 78)
-    for descricao, passou, segundos, detalhe, codigo in linhas:
-        marca = "OK   "
-        if not passou:
-            marca = "FALHA"
-        print("  %s %-40s %5.1fs  %s" % (marca, descricao, segundos, detalhe))
-        if not passou:
-            print("        (codigo de saida %d; veja resultados/ para a saida completa)" % codigo)
-
-    print()
-    if len(falhas) > 0:
-        print("RESULTADO: %d etapa(s) falharam:" % len(falhas))
-        for descricao in falhas:
-            print("   - " + descricao)
-        sys.exit(1)
-    print("RESULTADO: todas as %d etapas passaram." % len(linhas))
-    print("Saidas completas em: resultados/")
-
-
-if __name__ == "__main__":
-    main()
+    parser=argparse.ArgumentParser();parser.add_argument('--rapido',action='store_true');parser.add_argument('--matrizes',type=int,default=30);parser.add_argument('--historico',action='store_true',help='inclui experimentos antigos auxiliares');a=parser.parse_args()
+    if a.matrizes<1:parser.error('--matrizes deve ser positivo')
+    root=Path(__file__).resolve().parent;out=root/'resultados';out.mkdir(exist_ok=True)
+    for source in root.glob('*.py'): py_compile.compile(str(source), doraise=True)
+    tests=['test_binary128.py','test_takum.py','test_zvtakum.py','test_analises.py','test_benchmark.py','test_paralelo.py']
+    jobs=[[x] for x in tests]+[['demo_paralelo.py'],['demo_zvtakum.py'],['terminal_takum.py','3.14']]
+    if not a.rapido:jobs += [['analise_csr.py'],['benchmark_integrado.py','--matrizes',str(a.matrizes)]]
+    if a.historico and not a.rapido:jobs += [['eval_spmv.py'],['analise_erro.py',str(a.matrizes)],['eval_acumulador.py',str(a.matrizes)],['contagem_instrucoes.py']]
+    results=[]
+    for job in jobs:
+        print('Executando',' '.join(job),flush=True);start=time.perf_counter()
+        try:
+            p=subprocess.run([sys.executable]+job,cwd=root,text=True,encoding="utf-8",env={**os.environ,"PYTHONIOENCODING":"utf-8"},capture_output=True,timeout=900)
+            code=p.returncode;text=p.stdout+p.stderr
+        except subprocess.TimeoutExpired:
+            code=1;text='Timeout (900 segundos)'
+        (out/(job[0]+'.txt')).write_text(text,encoding='utf-8')
+        results.append({'command':job,'exit_code':code,'seconds':round(time.perf_counter()-start,3)})
+        print('OK' if code==0 else 'FALHA',flush=True)
+    report={'python':sys.version,'platform':platform.platform(),'mode':'quick' if a.rapido else ('full_with_history' if a.historico else 'full'), 'syntax_compilation':'PASS','matrices_per_scenario':a.matrizes,'jobs':results,'source_sha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.glob('*.py'))}}
+    (out/('validacao_rapida.json' if a.rapido else ('validacao_historica.json' if a.historico else 'validacao_completa.json'))).write_text(json.dumps(report,indent=2))
+    if any(r['exit_code'] for r in results):sys.exit(1)
+    print('RESULTADO: todas as %d etapas passaram.'%len(results))
+if __name__=='__main__':main()

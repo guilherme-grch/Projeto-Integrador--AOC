@@ -25,9 +25,7 @@ random.seed(42)
 np.random.seed(42)
 
 
-# ---------------------------------------------------------------------------
 # Emulacao dos formatos IEEE754 de baixa precisao
-# ---------------------------------------------------------------------------
 
 def round_ieee(x: float, exp_bits: int, mant_bits: int, estilo: str = "ieee") -> float:
     """Arredonda um float para um formato de ponto flutuante de baixa precisao.
@@ -81,9 +79,7 @@ FORMATOS = {
 }
 
 
-# ---------------------------------------------------------------------------
 # Geracao da matriz esparsa
-# ---------------------------------------------------------------------------
 
 def gerar_matriz_esparsa(n: int, densidade: float, faixa_dinamica: float):
     """Gera uma matriz esparsa n x n em formato de lista de (linha, col, valor).
@@ -91,8 +87,10 @@ def gerar_matriz_esparsa(n: int, densidade: float, faixa_dinamica: float):
     `faixa_dinamica` controla quantas ordens de grandeza os valores cobrem.
     Faixa grande e justamente onde o Takum deve levar vantagem sobre o FP8.
     """
+    if type(n) is not int or n < 1 or not 0 <= densidade <= 1:
+        raise ValueError('dimensoes/densidade invalidas')
     entradas = []
-    n_nz = max(n, int(n * n * densidade))
+    n_nz = int(n * n * densidade)
     vistos = set()
     while len(entradas) < n_nz:
         i = random.randrange(n)
@@ -132,12 +130,15 @@ def erro_relativo(y_teste, y_exato):
 
     A diferenca e calculada com Fractions (sem converter a referencia para
     float antes), para nao perder precisao quando o erro e muito pequeno.
-    Estouro (inf/NaN) devolve inf; referencia igual a zero e ignorada.
+    Estouro (inf/NaN) devolve inf; referencia zero: 0 se acerto, inf se divergencia (ver erro absoluto).
     """
+    if len(y_teste) != len(y_exato):
+        raise ValueError("vetores de tamanhos diferentes")
     erros = []
     for yt, ye in zip(y_teste, y_exato):
         ye = Fraction(ye)
         if ye == 0:
+            erros.append(0.0 if yt == 0 else float("inf"))
             continue
         if math.isnan(yt) or math.isinf(yt):
             erros.append(float("inf"))
@@ -182,9 +183,7 @@ def estatisticas(erros):
     }
 
 
-# ---------------------------------------------------------------------------
 # Experimento principal
-# ---------------------------------------------------------------------------
 
 def rodar_experimento(n, densidade, faixa_dinamica, rotulo):
     print()
