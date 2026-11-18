@@ -28,9 +28,7 @@ import math
 LN_RAIZ_E = 0.5
 
 
-# ---------------------------------------------------------------------------
 # Funcoes auxiliares pequenas
-# ---------------------------------------------------------------------------
 def nar_pattern(n):
     """Padrao do NaR para n bits: 1 seguido de zeros. Ex.: n=8 -> 10000000"""
     return 1 << (n - 1)
@@ -48,9 +46,7 @@ def pegar_bits(numero, posicao, quantidade):
     return (numero >> posicao) & mascara
 
 
-# ---------------------------------------------------------------------------
 # DECODE: bits -> numero real
-# ---------------------------------------------------------------------------
 def decode(bits, n):
     """Converte 'n' bits no formato Takum para um numero (float)."""
 
@@ -109,9 +105,7 @@ def decode(bits, n):
     return magnitude
 
 
-# ---------------------------------------------------------------------------
 # ENCODE: numero real -> bits
-# ---------------------------------------------------------------------------
 def campos_de_c(c):
     """Dado o inteiro c, devolve (D, r, C).
 
@@ -140,127 +134,61 @@ def para_complemento_de_dois(bits, n):
     return bits
 
 
+def log_value(bits, n):
+    """Logaritmo ell EXATO como Fraction, sem exp/log; exclui zero/NaR."""
+    from fractions import Fraction
+    width=max(n,12); b=bits << (width-n)
+    if bits in (0,nar_pattern(n)): raise ValueError('padrao especial')
+    S=(b>>(width-1))&1;D=(b>>(width-2))&1;R=(b>>(width-5))&7
+    r=R if D else 7-R
+    C=pegar_bits(b,width-5-r,r);p=width-5-r
+    c=(1<<r)-1+C if D else -(1<<(r+1))+1+C
+    value=Fraction(c)+Fraction(pegar_bits(b,0,p),1<<p)
+    return -value if S else value
+
+
+def encode_log(ell, n, negative=False):
+    """Quantiza ell na escala logaritmica. Empates para padrao par.
+
+    Entrada exata Fraction permite testar empates sem erro de math.log.
+    Saturacao/clamp impedem criar NaR ou zero a partir de um valor normal.
+    """
+    from fractions import Fraction
+    if type(n) is not int or n<2: raise ValueError('largura invalida')
+    ell=Fraction(ell); maximum=(1<<(n-1))-1
+    if ell<=log_value(1,n): bits=1
+    elif ell>=log_value(maximum,n): bits=maximum
+    else:
+        c=math.floor(ell);m=ell-c
+        D,r,C=campos_de_c(c);R=r if D else 7-r
+        W=max(n,12);p=W-5-r
+        raw=(D<<(W-2)) | (R<<(W-5)) | (C<<p) | int(m*(1<<p))
+        low=raw>>(W-n)
+        low=max(1,min(low,maximum-1))
+        middle=(log_value(low,n)+log_value(low+1,n))/2
+        bits=low+(ell>middle or (ell==middle and low%2==1))
+    return (-bits)&((1<<n)-1) if negative else bits
+
+
 def encode(x, n):
-    """Converte um numero (float) para o padrao Takum de n bits mais proximo."""
+    """Real -> Takum, vizinho no log com empate par.
 
-    if isinstance(x, complex):
-        raise TypeError("Takum nao representa numeros complexos")
-    x = float(x)
-
-    # --- casos especiais ---
-    if math.isnan(x):
-        return nar_pattern(n)
-    if x == 0.0:
-        return 0
+    log/exp em float64 sao aproximacoes do modelo funcional. Para testar
+    arredondamento exato no dominio logaritmico, use encode_log(Fraction,...).
+    Infinito de entrada satura por decisao explicita deste projeto.
+    """
+    if isinstance(x,complex): raise TypeError('Takum nao representa complexos')
+    if type(n) is not int or n<2: raise ValueError('largura invalida')
+    x=float(x)
+    if math.isnan(x): return nar_pattern(n)
+    if x==0: return 0
     if math.isinf(x):
-        x = math.copysign(1e300, x)   # Takum nao tem infinito: usa um numero enorme
-
-    # --- sinal e logaritmo ---
-    if x < 0:
-        S = 1
-    else:
-        S = 0
-
-    ell = math.log(abs(x)) / LN_RAIZ_E    # logaritmo na base raiz(e)
-
-    # Lp = c + m (sempre como se fosse positivo)
-    if S == 1:
-        Lp = -ell
-    else:
-        Lp = ell
-
-    # --- limita na faixa que o Takum aguenta: c entre -255 e 254 ---
-    EPS = 1e-12
-    if Lp >= 255.0:
-        Lp = 255.0 - EPS
-    elif Lp < -255.0:
-        Lp = -255.0
-
-    # --- separa parte inteira (c) e fracionaria (m) ---
-    c = math.floor(Lp)
-    m = Lp - c
-
-    # --- monta o padrao numa largura onde TUDO sempre cabe ---
-    # S+D+R+C ocupam no maximo 5+7 = 12 bits, entao qualquer W >= 12 nunca
-    # fica sem espaco. Depois reduzimos para n bits.
-    #
-    # CORRECAO: antes era W = max(n, 12). Para T8 isso arredondava DUAS
-    # vezes (primeiro para 12 bits, depois para 8) e em ~3% dos valores
-    # escolhia o vizinho mais distante (ex.: 42.0 virava 54.6 em vez de
-    # 33.1). Com W = 52 (a precisao de um float do Python) a mantissa e
-    # cortada uma unica vez, direto para n bits.
-    W = max(n, 52)
-
-    D, r, C = campos_de_c(c)
-    p = W - r - 5
-    if p > 0:
-        M = round(m * (1 << p))
-    else:
-        M = 0
-
-    # Se o arredondamento da mantissa passou do maximo (ex.: 0.9999 virou 1.0),
-    # zera M e soma 1 em c ("vai um").
-    if p > 0 and M >= (1 << p):
-        M = 0
-        c = c + 1
-        if c > 254:                          # passou do maior numero possivel
-            c = 254
-            M = (1 << (W - 7 - 5)) - 1
-        D, r, C = campos_de_c(c)
-        p = W - r - 5
-        if p <= 0:
-            M = 0
-
-    # campo R: depende de D
-    if D == 1:
-        R = r
-    else:
-        R = 7 - r
-
-    # --- junta os campos num unico numero ---
-    padrao = 0
-    padrao = padrao | (S << (W - 1))
-    padrao = padrao | (D << (W - 2))
-    padrao = padrao | ((R & 0b111) << (W - 5))
-    if r > 0:
-        padrao = padrao | ((C & ((1 << r) - 1)) << (W - 5 - r))
-    if p > 0:
-        padrao = padrao | (M & ((1 << p) - 1))
-
-    # --- reduz de W bits para n bits, arredondando ---
-    if n < W:
-        quantos_bits_cortar = W - n
-        com_sinal = para_complemento_de_dois(padrao, W)
-        # soma "meio" e corta: arredonda para o mais proximo
-        arredondado = (com_sinal + (1 << (quantos_bits_cortar - 1))) >> quantos_bits_cortar
-        # nao deixa sair da faixa de n bits com sinal
-        maximo = (1 << (n - 1)) - 1
-        minimo = -(1 << (n - 1))
-        if arredondado > maximo:
-            arredondado = maximo
-        if arredondado < minimo:
-            arredondado = minimo
-        padrao = arredondado & ((1 << n) - 1)
-
-    padrao = padrao & ((1 << n) - 1)
-
-    # --- correcoes finais ---
-    # 1) numero normal nao pode virar NaR: pega o vizinho
-    if padrao == nar_pattern(n):
-        padrao = (padrao + 1) & ((1 << n) - 1)
-    # 2) numero diferente de zero nao pode virar zero
-    if padrao == 0:
-        if S == 1:
-            padrao = (1 << n) - 1
-        else:
-            padrao = 1
-
-    return padrao
+        b=(1<<(n-1))-1
+        return (-b)&((1<<n)-1) if x<0 else b
+    return encode_log(math.log(abs(x))/LN_RAIZ_E,n,x<0)
 
 
-# ---------------------------------------------------------------------------
 # INSPECT: mostra os campos (util para estudar e para slides)
-# ---------------------------------------------------------------------------
 def inspect(bits, n):
     """Devolve um dicionario com todos os campos de um padrao Takum."""
     bits = bits & ((1 << n) - 1)
@@ -326,9 +254,7 @@ def inspect(bits, n):
     }
 
 
-# ---------------------------------------------------------------------------
 # OPERACOES: decodifica -> faz a conta em float -> codifica de volta
-# ---------------------------------------------------------------------------
 # Modelo FUNCIONAL: a conta e feita em float64 (53 bits de significando, bem
 # mais que os <= 27 bits de fracao de um T32) e o resultado e arredondado UMA
 # vez para n bits. Isso da o resultado arredondado corretamente na grande
@@ -386,7 +312,7 @@ def fma(a, b, c, n, n_out=None):
 
     a e b tem n bits. c e o resultado tem n_out bits (se n_out nao for
     dado, usa n). Isso permite somar em precisao maior: entradas T16,
-    saida T32 (e o que a instrucao vtdot.vv faz).
+    saida T32 (usado pelo baseline sequencial; o modelo paralelo usa acumulacao de 113 bits).
     """
     if n_out is None:
         n_out = n
@@ -415,9 +341,7 @@ def convert(bits, n_origem, n_destino):
     return encode(valor, n_destino)
 
 
-# ---------------------------------------------------------------------------
 # MULTIPLICACAO "hardware": soma dos logaritmos
-# ---------------------------------------------------------------------------
 def mul_lns(a, b, n):
     """Multiplica SOMANDO os logaritmos (ell) e fazendo XOR dos sinais.
 

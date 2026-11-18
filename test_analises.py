@@ -20,7 +20,7 @@ import analise_erro
 import contagem_instrucoes
 import eval_spmv
 import takum
-import zvtakum
+import zvtakum_legacy as zvtakum
 
 total = 0
 falhas = []
@@ -50,7 +50,6 @@ def mesmo_valor(a, b):
     return a == b
 
 
-# ---------------------------------------------------------------------------
 titulo("1. FLOAT128 EMULADO (analise_erro.arredonda_quad)")
 quad = analise_erro.arredonda_quad
 
@@ -95,7 +94,6 @@ dif = analise_erro.maior_diferenca_relativa(
     analise_erro.spmv_quad(entradas, x, 32), eval_spmv.spmv_exato(entradas, x, 32))
 check("SpMV Float128 vs exato: diferenca relativa %.1e < 1e-30" % dif, dif < 1e-30)
 
-# ---------------------------------------------------------------------------
 titulo("2. ESTATISTICAS DA DISTRIBUICAO (analise_erro)")
 check("combinar: inf e NaN viram 1.0; acima de 1.0 e limitado a 1.0",
       analise_erro.combinar([0.5, math.inf, math.nan, 7.0, 0.0]) == [0.5, 1.0, 1.0, 1.0, 0.0])
@@ -115,7 +113,6 @@ r = analise_erro.resumo([0.1, 0.2, math.inf, 0.3])
 check("resumo: 1 overflow em 4 = 25%", r["overflow_%"] == 25.0)
 check("resumo: o maximo combinado e 1.0", r["max"] == 1.0)
 
-# ---------------------------------------------------------------------------
 titulo("3. CONTAGEM DE INSTRUCOES: EXEMPLO FEITO A MAO")
 # 3 linhas, 8 colunas. Linha 0: 5 nao-zeros. Linha 1: vazia. Linha 2: 1 nao-zero.
 entradas = [(0, 0, 1.0), (0, 1, 2.0), (0, 2, 3.0), (0, 3, 4.0), (0, 4, 5.0),
@@ -140,7 +137,6 @@ y = [takum.decode(b, r["n_acc"]) for b in r["y_bits"]]
 check("y = [15, 0, 12] (obtido %s)" % [round(v, 4) for v in y],
       abs(y[0] - 15) < 1e-6 and y[1] == 0.0 and abs(y[2] - 12) < 1e-6)
 
-# ---------------------------------------------------------------------------
 titulo("4. CONTAGEM: SIMULADOR == FORMULA EM MUITOS CASOS")
 divergencias = 0
 casos = 0
@@ -156,7 +152,6 @@ for semente in range(6):
 check("%d combinacoes (semente x densidade x VLEN x SEW) sem divergencia (%d)" % (
     casos, divergencias), divergencias == 0)
 
-# ---------------------------------------------------------------------------
 titulo("5. PROGRAMA NO SIMULADOR == MESMA CONTA FEITA DIRETO COM takum.py")
 # Reproduz o algoritmo sem passar pelo simulador: vtdot por pedaco (fma com
 # acumulador ampliado) e soma dos parciais com takum.add.
@@ -205,7 +200,6 @@ for sew in (8, 16, 32):
 check("y perto do exato em T8, T16 e T32, medido pela soma dos |termos| (%d fora)" % erros_valor,
       erros_valor == 0)
 
-# ---------------------------------------------------------------------------
 titulo("6. CENSO DE PADROES (analise_csr) CONTRA NUMPY E RELACOES CONHECIDAS")
 tab_fp16 = analise_csr.tabela_do_formato("FP16")
 ref16 = np.arange(65536, dtype=np.uint16).view(np.float16).astype(np.float64)
@@ -278,7 +272,6 @@ check("classes especiais: FP16=4, E5M2=4, E4M3=3",
       and analise_csr.classes_especiais(analise_csr.censo(tab_e5)) == 4
       and analise_csr.classes_especiais(analise_csr.censo(tab_e4)) == 3)
 
-# ---------------------------------------------------------------------------
 titulo("7. EVENTOS DE EXCECAO (analise_csr) - CASOS FEITOS A MAO")
 info16 = analise_csr.preparar_ieee(tab_fp16)
 check("FP16: maximo 65504, overflow a partir de 65520, menor normal 2^-14",
@@ -382,7 +375,6 @@ check("T8 e T16: acima do limite SAT o encode() devolve o maior padrao (%d erros
 check("T8 e T16: abaixo do limite CLAMP o encode() devolve o menor padrao (%d erros)" % erros_clamp,
       erros_clamp == 0)
 
-# ---------------------------------------------------------------------------
 print()
 print("=" * 62)
 if len(falhas) > 0:

@@ -41,9 +41,7 @@ COMANDOS
 """
 
 
-# ---------------------------------------------------------------------------
 # Ler numeros
-# ---------------------------------------------------------------------------
 def avaliar(no, constantes):
     """Calcula um no da arvore da expressao (so numeros e contas simples)."""
     if isinstance(no, ast.Constant) and isinstance(no.value, (int, float)):
@@ -112,9 +110,7 @@ def ler_takum(token, n):
     return valor
 
 
-# ---------------------------------------------------------------------------
 # Escrever numeros
-# ---------------------------------------------------------------------------
 def bits_com_espacos(b, n):
     """Escreve os n bits em grupos de 4: 0100 1101 0010 0111"""
     texto = format(b, "0%db" % n)
@@ -161,9 +157,7 @@ def mostrar_takum(b, n):
     return linhas
 
 
-# ---------------------------------------------------------------------------
 # As tres funcoes principais: decimal -> takum, takum -> decimal, conta
-# ---------------------------------------------------------------------------
 def mostrar_decimal(x, n):
     """Decimal digitado -> Takum mais proximo."""
     b = takum.encode(x, n)
@@ -267,9 +261,7 @@ def mostrar_conta(token_a, operador, token_b, n):
     return linhas
 
 
-# ---------------------------------------------------------------------------
 # Comandos extras
-# ---------------------------------------------------------------------------
 def comando_faixa(n):
     maior = takum.decode((1 << (n - 1)) - 1, n)
     menor = takum.decode(1, n)
@@ -292,9 +284,7 @@ def comando_tabela(n):
     return linhas
 
 
-# ---------------------------------------------------------------------------
 # Entender uma linha digitada
-# ---------------------------------------------------------------------------
 def processar_linha(linha, estado):
     """Recebe o que a pessoa digitou e devolve (texto, continuar)."""
     linha = linha.strip()
@@ -351,9 +341,7 @@ def processar_linha(linha, estado):
         return "  Erro: %s   (digite 'ajuda')" % erro, True
 
 
-# ---------------------------------------------------------------------------
 # Programa principal
-# ---------------------------------------------------------------------------
 def main():
     estado = {"n": 16}
     argumentos = sys.argv[1:]

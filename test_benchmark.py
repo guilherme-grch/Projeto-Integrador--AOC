@@ -53,7 +53,6 @@ def igual(a, b):
     return a == b
 
 
-# ---------------------------------------------------------------------------
 titulo("1. FP16 EMULADO CONTRA np.float16 (referencia independente)")
 random.seed(5)
 amostras = []
@@ -70,7 +69,6 @@ with np.errstate(all="ignore"):
 check("%d valores (do subnormal ao estouro): round_ieee(5,10) == np.float16" %
       len(amostras), len(ruins) == 0, str(ruins[:3]))
 
-# ---------------------------------------------------------------------------
 titulo("2. OFP8 E4M3 / E5M2 CONTRA A TABELA DOS 256 PADROES")
 
 
@@ -118,7 +116,6 @@ for nome, (eb, mb, estilo) in (("OFP8 E4M3", (4, 3, "e4m3")),
     check("%s: os %d valores da tabela sao pontos fixos" % (nome, len(vals)),
           all(eval_spmv.round_ieee(v, eb, mb, estilo) == v for v in vals))
 
-# ---------------------------------------------------------------------------
 titulo("3. ESTOURO")
 check("E4M3: 448 cabe, 500 estoura (inf)",
       eval_spmv.round_ieee(448.0, 4, 3, "e4m3") == 448.0 and
@@ -138,7 +135,6 @@ check("zero, inf e NaN passam direto",
       eval_spmv.round_ieee(math.inf, 4, 3, "e4m3") == math.inf and
       math.isnan(eval_spmv.round_ieee(math.nan, 4, 3, "e4m3")))
 
-# ---------------------------------------------------------------------------
 titulo("4. ERRO RELATIVO NAO PERDE PRECISAO DA REFERENCIA")
 ye = Fraction(1) + Fraction(1, 2 ** 70)          # 1 + 2^-70: float() arredonda para 1.0
 e = eval_spmv.erro_relativo([1.0], [ye])[0]
@@ -148,12 +144,11 @@ check("estouro (inf) vira erro inf",
       eval_spmv.erro_relativo([math.inf], [Fraction(3)]) == [math.inf])
 check("NaN vira erro inf",
       eval_spmv.erro_relativo([math.nan], [Fraction(3)]) == [math.inf])
-check("referencia zero e ignorada",
-      eval_spmv.erro_relativo([1.0, 2.0], [Fraction(0), Fraction(4)]) == [0.5])
+check("referencia zero divergente e detectada",
+      eval_spmv.erro_relativo([1.0, 2.0], [Fraction(0), Fraction(4)]) == [math.inf, 0.5])
 check("erro relativo comum: |3 - 4| / 4 = 0.25",
       eval_spmv.erro_relativo([3.0], [Fraction(4)]) == [0.25])
 
-# ---------------------------------------------------------------------------
 titulo("5. ESTATISTICAS (limite de 100% vs distribuicao original)")
 erros = [0.01, 0.5, 3.0, 250.0, math.inf]
 st = eval_spmv.estatisticas(erros)
@@ -162,7 +157,6 @@ check("estouro conta como erro de 100% na metrica combinada",
 check("erros originais (3.0 e 250.0) NAO somem: o limite so vale na metrica combinada",
       sorted(e for e in erros if math.isfinite(e))[-1] == 250.0)
 
-# ---------------------------------------------------------------------------
 print()
 print("=" * 62)
 if len(falhas) > 0:
