@@ -40,7 +40,6 @@ def titulo(texto):
     print("=" * 62)
 
 
-# ---------------------------------------------------------------------------
 titulo("1. CASOS ESPECIAIS (zero e NaR)")
 for n in (8, 16, 32):
     check("T%d: zero decodifica como 0.0" % n, takum.decode(0, n) == 0.0)
@@ -48,13 +47,11 @@ for n in (8, 16, 32):
           math.isnan(takum.decode(takum.nar_pattern(n), n)))
     check("T%d: encode(0.0) == 0" % n, takum.encode(0.0, n) == 0)
 
-# ---------------------------------------------------------------------------
 titulo("2. VALORES CONHECIDOS (do paper)")
 # Com 2 bits: "01" vale +1 e "11" vale -1
 check("bits '01' (n=2) == +1.0", aprox(takum.decode(0b01, 2), 1.0))
 check("bits '11' (n=2) == -1.0", aprox(takum.decode(0b11, 2), -1.0))
 
-# ---------------------------------------------------------------------------
 titulo("3. IDA E VOLTA (encode -> decode) EM T32")
 valores = [1.0, -1.0, 2.0, 0.5, -0.5, 3.14159265, 100.0, -0.001,
            1e10, 1e-10, 6.02214076e23, -7.5]
@@ -65,7 +62,6 @@ for v in valores:
     check("T32 ida e volta %14.6e (erro relativo %.2e)" % (v, erro),
           erro < 1e-6, "-> " + str(voltou))
 
-# ---------------------------------------------------------------------------
 titulo("4. PRECISAO POR LARGURA (T8, T16, T32)")
 print("  Esperado: quanto MENOS bits, MAIOR o erro.")
 pi = 3.14159265358979
@@ -77,7 +73,6 @@ for n in (8, 16, 32):
 check("erro T8 > erro T16", erros[8] > erros[16])
 check("erro T16 > erro T32", erros[16] > erros[32])
 
-# ---------------------------------------------------------------------------
 titulo("5. OPERACOES EM T32 (soma, subtracao, multiplicacao, divisao)")
 # cada caso: (nome, funcao, x, y, resultado esperado)
 casos = [
@@ -98,7 +93,6 @@ for nome, operacao, x, y, esperado in casos:
 r = takum.div(takum.encode(1.0, 32), takum.encode(0.0, 32), 32)
 check("T32 divisao por zero -> NaR", math.isnan(takum.decode(r, 32)))
 
-# ---------------------------------------------------------------------------
 titulo("6. FMA (multiplica e soma de uma vez)")
 a = 2.5
 b = 4.0
@@ -127,7 +121,6 @@ obtido = takum.decode(bits, 32)
 check("FMA T16xT16 -> T32: 1.5*2.5+0.25 = %.6f (esperado ~4.0)" % obtido,
       aprox(obtido, 4.0, 1e-3))
 
-# ---------------------------------------------------------------------------
 titulo("7. MULTIPLICACAO VIA LOGARITMOS (mul_lns)")
 print("  mul() e mul_lns() devem dar o mesmo resultado.")
 pares = [(2.0, 3.0), (7.5, 3.2), (-2.0, 4.0), (-1.5, -6.0), (0.25, 8.0)]
@@ -139,7 +132,6 @@ for x, y in pares:
     check("T32 %s * %s: mul=%.6f mul_lns=%.6f" % (x, y, r1, r2),
           aprox(r1, r2, 1e-6))
 
-# ---------------------------------------------------------------------------
 titulo("8. CONVERSAO ENTRE LARGURAS (instrucao vncvt.t.t)")
 for v in [1.0, 3.14159, 100.0, 0.001]:
     b32 = takum.encode(v, 32)
@@ -153,7 +145,6 @@ b16 = takum.convert(b32, 32, 16)
 check("conversao T32->T16 mantem o valor aproximado",
       aprox(takum.decode(b16, 16), 100.0, 0.05))
 
-# ---------------------------------------------------------------------------
 titulo("9. REGRESSAO: T8 COM NUMEROS MUITO GRANDES/PEQUENOS")
 print("  (este caso dava erro antes da correcao do encode)")
 for v in (1e-30, 1e-12, 1.0, 1e12, 1e30, -1e12):
@@ -168,7 +159,6 @@ for v in (1e-30, 1e-12, 1.0, 1e12, 1e30, -1e12):
     except Exception as erro:
         check("T8 encode/decode %9.0e" % v, False, "EXCECAO: " + str(erro))
 
-# ---------------------------------------------------------------------------
 titulo("9b. REGRESSAO: T8 DEVE ESCOLHER O VIZINHO MAIS PROXIMO")
 print("  (antes da correcao, o encode arredondava 2 vezes e errava ~3%)")
 # Para cada valor abaixo, o ell cai mais perto do vizinho de baixo.
@@ -212,7 +202,6 @@ for inteiro in range(1, 1001):
 check("T8, inteiros de 1 a 1000: sempre o vizinho mais proximo (%d erros)" % erros_vizinho,
       erros_vizinho == 0)
 
-# ---------------------------------------------------------------------------
 titulo("10. ORDEM DOS PADROES (complemento de dois)")
 print("  Lendo os bits como inteiro COM sinal, os valores devem crescer.")
 for n in (8, 12):
@@ -234,7 +223,6 @@ for n in (8, 12):
     check("T%d: %d padroes em ordem estritamente crescente" % (n, len(lista)),
           crescente)
 
-# ---------------------------------------------------------------------------
 titulo("11. FAIXA DINAMICA (dado central do artigo)")
 for n in (8, 16, 32):
     maior = takum.decode((1 << (n - 1)) - 1, n)
@@ -248,7 +236,6 @@ menor8 = takum.decode(1, 8)
 check("T8 cobre mais de 50 ordens de grandeza (FP8 E4M3 cobre ~5)",
       math.log10(maior8 / menor8) > 50)
 
-# ---------------------------------------------------------------------------
 titulo("12. INSPECT (mostra os campos de um numero)")
 for v in [1.0, -1.0, 2.0]:
     info = takum.inspect(takum.encode(v, 12), 12)
@@ -256,7 +243,6 @@ for v in [1.0, -1.0, 2.0]:
     for nome_campo, conteudo in info.items():
         print("      %-22s = %s" % (nome_campo, conteudo))
 
-# ---------------------------------------------------------------------------
 titulo("13. CONFERENCIA COM O ARTIGO DO HUNHOLD (AVX10.2, arXiv 2503.14067)")
 print("  Cada teste confere uma afirmacao do artigo.")
 
@@ -389,7 +375,6 @@ check("T8 tem pelo menos 90%% da faixa do T32 (%.0f de %.0f ordens)" % (faixas[8
 check("T16 e T32 tem a mesma faixa (%.1f e %.1f ordens)" % (faixas[16], faixas[32]),
       abs(faixas[16] - faixas[32]) < 0.5)
 
-# ---------------------------------------------------------------------------
 titulo("14. REFERENCIA INDEPENDENTE (mpmath + manipulacao de texto)")
 print("  Outra implementacao do decode, escrita so a partir da Definicao 2 do")
 print("  artigo, sem reaproveitar nenhuma funcao do takum.py.")
@@ -478,7 +463,6 @@ for _ in range(5000):
 check("encode(-x) == complemento de dois de encode(x) (T8/T16/T32, 5000 valores)",
       ruins == 0, "%d divergencias" % ruins)
 
-# ---------------------------------------------------------------------------
 titulo("15. NaR E ZERO EM TODAS AS OPERACOES (inclusive mul_lns)")
 for n in (8, 16, 32):
     NAR = takum.nar_pattern(n)
@@ -500,7 +484,6 @@ for n in (8, 16, 32):
           takum.fma(NAR, um, um, n) == NAR and takum.fma(um, NAR, um, n) == NAR and
           takum.fma(um, um, NAR, n) == NAR)
 
-# ---------------------------------------------------------------------------
 print()
 print("=" * 62)
 if len(falhas) > 0:
