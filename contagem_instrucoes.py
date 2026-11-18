@@ -43,16 +43,14 @@ import sys
 
 import eval_spmv
 import takum
-import zvtakum
+import zvtakum_legacy as zvtakum
 
 TAMANHO = 64
 VLENS = [128, 256, 512]
 LARGURAS = [8, 16, 32]
 
 
-# ---------------------------------------------------------------------------
 # Preparar os dados na "memoria" (listas em formato CSR)
-# ---------------------------------------------------------------------------
 def montar_linhas(entradas, n, sew):
     """Devolve linhas[i] = lista de (coluna, bits Takum do valor), em CSR."""
     linhas = []
@@ -65,9 +63,7 @@ def montar_linhas(entradas, n, sew):
     return linhas
 
 
-# ---------------------------------------------------------------------------
 # O programa Zvtakum: roda no simulador
-# ---------------------------------------------------------------------------
 def spmv_zvtakum(cpu, linhas, x_bits, sew):
     """Executa y = A.x com vtdot.vv no simulador.
 
@@ -109,9 +105,7 @@ def spmv_zvtakum(cpu, linhas, x_bits, sew):
     return y_bits, n_acc, memoria
 
 
-# ---------------------------------------------------------------------------
 # Formulas (o modelo escrito em conta, para conferir com o simulador)
-# ---------------------------------------------------------------------------
 def pedacos_da_matriz(linhas, vlmax):
     """(total de pedacos, linhas nao vazias) para um dado VLMAX."""
     total = 0
@@ -142,9 +136,7 @@ def contagem_zvtakum(linhas, vlmax):
     return 5 * pedacos + 2 * extras + len(linhas)
 
 
-# ---------------------------------------------------------------------------
 # Medir no simulador
-# ---------------------------------------------------------------------------
 def medir(entradas, x, n, sew, vlen):
     """Roda o SpMV no simulador. Devolve um dicionario com tudo que importa."""
     linhas = montar_linhas(entradas, n, sew)
@@ -179,9 +171,7 @@ def gerar_dados(densidade, faixa, semente):
     return entradas, x
 
 
-# ---------------------------------------------------------------------------
 # Apresentacao
-# ---------------------------------------------------------------------------
 def tabela(densidade, rotulo):
     entradas, x = gerar_dados(densidade, 12, 7)
     print()

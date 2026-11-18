@@ -5,7 +5,7 @@ O enunciado pede: "calcular a distribuicao do erro relativo acumulado em
 relacao a precisao quadrupla (Float128)". Este script faz isso em 3 passos:
 
   1. REFERENCIA FLOAT128: o Python nao tem float128 de verdade (o
-     np.longdouble tem so 64 bits de significando). Entao emulamos o
+     np.longdouble depende da plataforma e nao garante 113 bits). Entao emulamos o
      binary128 do IEEE 754: 113 bits de significando, arredondando para o
      mais proximo (empate -> par) a CADA operacao da referencia.
 
@@ -45,42 +45,9 @@ ROTULOS = ["<1e-7", "1e-7..1e-5", "1e-5..1e-3", "1e-3..1e-2",
            "1e-2..1e-1", "1e-1..1", ">=1 (100%)"]
 
 
-# ---------------------------------------------------------------------------
 # Referencia Float128 (binary128 emulado com fracoes)
-# ---------------------------------------------------------------------------
-def arredonda_quad(f):
-    """Arredonda uma Fraction para 113 bits de significando (empate -> par).
-
-    Ignoramos a faixa de expoentes do binary128 (+-16383): os nossos
-    valores ficam muito longe dela.
-    """
-    if f == 0:
-        return Fraction(0)
-
-    sinal = 1
-    if f < 0:
-        sinal = -1
-    m = abs(f)
-
-    # e = piso(log2(m)), calculado so com inteiros (sem erro de float)
-    e = m.numerator.bit_length() - m.denominator.bit_length()
-    if Fraction(2) ** e > m:
-        e = e - 1
-
-    # coloca m numa escala em que o significando e um inteiro de 113 bits
-    passo = Fraction(2) ** (e - (PRECISAO_QUAD - 1))
-    inteiro = round(m / passo)            # round() de Fraction: empate -> par
-    return sinal * inteiro * passo
-
-
-def spmv_quad(entradas, x, n):
-    """y = A.x com TODA operacao arredondada para Float128."""
-    y = [Fraction(0)] * n
-    xf = [Fraction(v) for v in x]
-    for i, j, v in entradas:
-        produto = arredonda_quad(Fraction(v) * xf[j])
-        y[i] = arredonda_quad(y[i] + produto)
-    return y
+from referencia_binary128 import round_binary128 as arredonda_quad
+from referencia_binary128 import spmv_binary128 as spmv_quad
 
 
 def maior_diferenca_relativa(y_a, y_b):
@@ -94,9 +61,7 @@ def maior_diferenca_relativa(y_a, y_b):
     return maior
 
 
-# ---------------------------------------------------------------------------
 # Estatisticas da distribuicao
-# ---------------------------------------------------------------------------
 def combinar(erros):
     """Estouro (inf/NaN) vira 100%; erros acima de 100% sao limitados a 100%."""
     saida = []
@@ -152,9 +117,7 @@ def resumo(erros):
     }
 
 
-# ---------------------------------------------------------------------------
 # Um cenario = varias matrizes aleatorias com a mesma faixa dinamica
-# ---------------------------------------------------------------------------
 def rodar_cenario(faixa, tentativas):
     """Devolve (erros por formato, maior diferenca quad-vs-exato)."""
     erros = {}
@@ -217,9 +180,7 @@ def imprimir_cenario(faixa, resumos):
         print(linha)
 
 
-# ---------------------------------------------------------------------------
 # Figura: distribuicao acumulada (CDF) do erro, uma por cenario
-# ---------------------------------------------------------------------------
 def gerar_figura(todos, caminho):
     """Desenha a CDF do erro combinado. Devolve True se conseguiu."""
     try:
@@ -268,9 +229,7 @@ def gerar_figura(todos, caminho):
     return True
 
 
-# ---------------------------------------------------------------------------
 # Programa principal
-# ---------------------------------------------------------------------------
 def main():
     tentativas = 30
     if len(sys.argv) > 1:

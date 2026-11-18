@@ -21,8 +21,7 @@ Formatos IEEE754 usados aqui seguem a especificacao real:
   OFP8 E4M3: sem infinito; so o padrao S.1111.111 e NaN; maximo 448.
   OFP8 E5M2: estilo IEEE (infinito e NaN com expoente todo 1); maximo 57344.
   FP16 e bfloat16: IEEE754 comuns.
-(O benchmark eval_spmv.py emula o E4M3 de forma mais simples, com maximo ~240;
- a diferenca nao muda as conclusoes.)
+O benchmark usa maximo E4M3=448 e inf como marcador de falha de conversao.
 
 Rodar:  python3 analise_csr.py
 """
@@ -43,9 +42,7 @@ FORMATOS_IEEE = {
 }
 
 
-# ---------------------------------------------------------------------------
 # Decodificar um padrao de bits IEEE754 de baixa precisao
-# ---------------------------------------------------------------------------
 def decodificar_ieee(padrao, bits_exp, bits_mant, estilo):
     """Devolve (classe, valor). classe: zero, subnormal, normal, inf ou nan."""
     n = 1 + bits_exp + bits_mant
@@ -98,9 +95,7 @@ def tabela_do_formato(nome):
     return [decodificar_ieee(p, bits_exp, bits_mant, estilo) for p in range(1 << n)]
 
 
-# ---------------------------------------------------------------------------
 # PARTE 1 - censo
-# ---------------------------------------------------------------------------
 def censo(tabela):
     """Conta quantos padroes ha em cada classe."""
     contagem = {"zero": 0, "subnormal": 0, "normal": 0, "inf": 0, "nan": 0, "nar": 0}
@@ -155,9 +150,7 @@ def parte1():
     return resultados
 
 
-# ---------------------------------------------------------------------------
 # PARTE 2 - CSRs
-# ---------------------------------------------------------------------------
 def parte2():
     print()
     print("=" * 78)
@@ -172,7 +165,7 @@ def parte2():
 
   Proposta Zvtakum (decisao NOSSA de projeto, nao imposicao do formato):
     frm      nao usado: o simulador implementa um unico arredondamento
-             (para o mais proximo; empate para cima).
+             (vizinho no logaritmo; empate para par).
     OF, UF   nao existem: o resultado satura no maior valor e um numero
              diferente de zero nunca vira zero (ver PARTE 3 para o custo disso).
     NV, DZ   viram NaR no proprio dado, que se propaga sozinho pelas contas;
@@ -183,9 +176,7 @@ def parte2():
 """)
 
 
-# ---------------------------------------------------------------------------
 # PARTE 3 - eventos de excecao
-# ---------------------------------------------------------------------------
 def operar(op, a, b):
     """Conta exata em float64. Divisao por zero devolve NaN (0/0) ou infinito."""
     if op == "add":

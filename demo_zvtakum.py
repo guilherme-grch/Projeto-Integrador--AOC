@@ -14,7 +14,6 @@ print("=" * 66)
 print("DEMONSTRACAO DA EXTENSAO VETORIAL Zvtakum")
 print("=" * 66)
 
-# ---------------------------------------------------------------------------
 print()
 print("PASSO 1 - Montagem: assembly vira palavra de 32 bits")
 print("-" * 66)
@@ -30,7 +29,6 @@ for linha in programa:
     palavras.append(w)
     print(f"  {linha:<24} -> 0x{w:08X}  ({format(w, '032b')})")
 
-# ---------------------------------------------------------------------------
 print()
 print("PASSO 2 - Decodificacao: o processador le os bits de volta")
 print("-" * 66)
@@ -41,7 +39,6 @@ for w in palavras:
     print(f"  0x{w:08X}   {f6}    v{i['vd']:<4} v{i['vs1']:<4} v{i['vs2']:<4} "
           f"{zvtakum.desmontar(w)}")
 
-# ---------------------------------------------------------------------------
 print()
 print("PASSO 3 - Execucao no processador simulado")
 print("-" * 66)
@@ -74,12 +71,12 @@ for linha, w in zip(programa, palavras):
     obtido = cpu.ler(i["vd"], sew_saida)
     esp = esperados[i["nome"]]
     ok = all(abs(o - e) <= 1e-6 * max(1.0, abs(e)) for o, e in zip(obtido, esp))
-    marca = "OK" if ok else "DIVERGE"
+    if not ok: raise AssertionError("demonstracao divergiu: "+linha)
+    marca = "OK"
     print(f"  {linha}")
     print(f"      resultado : {[round(x, 6) for x in obtido]}")
     print(f"      esperado  : {[round(x, 6) for x in esp]}   [{marca}]")
 
-# ---------------------------------------------------------------------------
 print()
 print("PASSO 4 - Conversao de largura (vncvt.t.t): T32 -> T16")
 print("-" * 66)
@@ -94,7 +91,6 @@ for a, d in zip(antes, depois):
     err = abs((d - a) / a) if a != 0 else 0.0
     print(f"  {a:>14.6f}  {a:>14.6f}  {d:>14.6f}  {err:>10.2e}")
 
-# ---------------------------------------------------------------------------
 print()
 print("PASSO 5 - Contagem de instrucoes (dado para a Fase 3)")
 print("-" * 66)
